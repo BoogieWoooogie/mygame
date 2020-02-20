@@ -1,0 +1,584 @@
+import random as r
+import math
+
+
+#Added for clarity in text 
+def clear(lines):
+  for x in range(lines):
+    print('**************************************')
+
+#playerclass
+class Player:
+  def __init__(self,name):
+    self.name = name
+    self.party = [self]
+    self.level = 1
+    self.gear = {
+               'helm' : 0,
+               'chest' : 0,
+               'gloves' : 0,
+               'pants' : 0,
+               'boots' : 0,
+    }
+    self.inventory = []
+    self.skill_points_max = 0
+    self.skill_points = 1
+    self.dots = []
+    self.maxmana = 10
+    self.speed = 2
+    self.isHuman = 1
+    self.buffs = []
+    self.debuffs = []
+    self.currentmana = self.maxmana
+    self.warrmod = 0
+    self.rangermod = 0
+    self.magemod = 0
+    self.stren = 5
+    self.dext = 5
+    self.intel = 5
+    self.spells = {
+              'fireball' : 0,
+              'heal' : 0,
+              'doubleattack' : 0
+    }
+    self.cc = 5
+    self.cd = 1.5
+    self.exper = 0
+    self.base_attack = 5
+    self.attack = self.Attack
+    self.attack_value = self.attack.roll_values(self)
+    self.maxhp = 20
+    self.currenthp = self.maxhp
+    self.armor = 1
+  class Attack:
+    #left blank for possible modifiers
+    def roll_values(self):
+      return [(self.base_attack), (self.base_attack * self.stren * 0.5 ) + (self.base_attack * self.dext*0.25)]
+    def attack(self):
+      crit_value = 0
+      if r.randint(0,100) <= self.cc:
+        crit_value = 1
+      return round(r.uniform(self.attack_value[0],self.attack_value[1]),2), crit_value
+  def tick(self):
+    removelist = []
+    if not self.dots:
+      return 0
+    else:
+      for x in self.dots:
+        if x.dotDuration == 0:
+          self.currenthp -= x.dotDamage
+          self.removelist.append(x)
+        elif x.dotDuration % x.tickRate == 0:
+          print(f'{x.name} ticks for {x.dotDamage} damage!')
+          self.currenthp -= x.dotDamage
+        x.dotDuration -= 1
+    for x in removelist:
+      if x in self.dots:
+        self.dots.remove(x)      
+  def add_stren(self, value):
+    self.stren += value
+    self.maxhp += value*2
+    self.currenthp += value*2
+    self.attack_value = self.attack.roll_values(self)
+  def add_dext(self,value):
+    self.dext += value
+    self.cc += value*0.3
+    self.attack_value = self.attack.roll_values(self)
+  def add_intel(self, value):
+    self.intel += value
+    self.attack_value = self.attack.roll_values(self)
+  def levelup(self):
+    self.level += 1
+    self.skill_points_max = self.level * 2
+    self.skill_points += 2
+    self.base_attack += 1
+    self.currenthp = self.maxhp
+    clear(3)
+    print('Congrats! You leveled to level ', self.level)
+    while self.skill_points != 0:
+      print(f'You have {self.skill_points} skill points left.')
+      print('Press 1 to add a stat, or 2 to save skill points. You need skill points to learn spells.')
+      loc = input()
+      if loc == '1':
+        print('1 for strength, 2 for dexterity, 3 for intelligence.')
+        stat = input()
+        if stat == '1':
+          print('How many points would you like to add?')
+          val = int(input())
+          if val > self.skill_points:
+            print('You do not have enough skill points to do that.')
+          else:
+            self.add_stren(val)
+            self.skill_points -= val
+        elif stat == '2':
+          print('How many points would you like to add?')
+          val = int(input())
+          if val > self.skill_points:
+            print('You do not have enough skill points to do that.')
+          else:
+            self.add_dext(val)
+            self.skill_points -= val
+        elif stat == '3':
+          print('How many points would you like to add?')
+          val = int(input())
+          if val > self.skill_points:
+            print('You do not have enough skill points to do that.')
+          else:
+            self.add_intel(val)
+            self.skill_points -= val
+      elif loc == '2':
+        print(f'You are saving {self.skill_points} point/points. Learn spells in town.')
+        self.attack_value = self.attack.roll_values(self)
+        break
+      self.attack_value = self.attack.roll_values(self)
+
+
+#Item creation
+#itemsclass
+class Item:
+  def __init__ (self):
+    self.slot = ''
+    self.name = ''
+    self.level = hero.level
+    self.stren = 0
+    self.dext = 0
+    self.intel = 0
+    self.atk = 0
+  def roll_stats(self):
+    itemroll = r.randint(0,4)
+    if itemroll == 0:
+      self.name, self.slot = 'helm', 'helm'
+    elif itemroll == 1:
+      self.name, self.slot = 'chest', 'chest'
+    elif itemroll == 2:
+      self.name, self.slot = 'gloves', 'gloves'
+    elif itemroll == 3:
+      self.name, self.slot = 'pants', 'pants'
+    elif itemroll == 4:
+      self.name, self.slot = 'boots', 'boots'
+    strength_roll = r.randint(self.level * 3, 100)
+    dexterity_roll = r.randint(self.level*3, 100)
+    intelligence_roll = r.randint(self.level*3, 100)
+    if strength_roll > 50:
+      self.stren += r.randint((math.floor(self.level*0.5)), self.level*2)
+    if dexterity_roll > 50:
+      self.dext += r.randint((math.floor(self.level*0.5)), self.level*2)
+    if intelligence_roll > 50:
+      self.intel += r.randint((math.floor(self.level*0.5)), self.level*2)
+    if self.stren >= 5:
+      self.name += ' of strength'
+    if self.dext >= 5:
+      self.name += ' of dexterity'
+    if self.intel >= 5:
+      self.name += ' of intelligence'
+  def get_stats(self):
+    clear(1)
+    print(self.name)
+    print(f'{self.stren} strength')
+    print(f'{self.dext} dexterity')
+    print(f'{self.intel} intelligence')
+    return 0
+  def equip(self, who):
+    if hero.gear[self.slot] != 0:
+      print('You must remove the other piece in that slot first.')
+      return 0
+    else:
+      hero.gear[self.slot] = self
+      hero.add_stren(self.stren)
+      hero.add_dext(self.dext)
+      hero.add_intel(self.intel)
+      return 0
+  def dequip(self):
+    (hero.gear[self.slot]) = 0
+    hero.add_stren(0-(self.stren))
+    hero.add_dext(0-(self.dext))
+    hero.add_intel(0-(self.intel))
+
+#spellsclass ADD A COUPLE NEW SPELLS
+class Spells:
+  masterlist = {'fireball', 'doubleattack', 'heal'}
+  def __init__ (self, name):
+    self.name = name
+    self.damagemod = 0
+    self.stat = 'blank'
+#damagemod multiplies by your intelligence, or maybe damage from intelligence etc to get damage value
+    self.cooldown = 0
+    self.debuff = 0
+    self.target = 'blank'
+    self.area = 'blank'
+    self.buff = 0
+    self.dot = 0
+    #room for more modifiers
+#spellbook creates the object and adds it to players spells
+  def spellbook_add(self, who):
+    if self.name == 'fireball':
+      self.damagemod = 1.5
+      self.area = 'single'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.cooldown = 0
+      who.spells[self.name] = self
+    elif self.name == 'heal':
+      self.damagemod = 2.5
+      self.area = 'single'
+      self.cooldown = 0
+      self.target = 'ally'
+      self.stat = 'intelligence'
+      who.spells[self.name] = self
+    elif self.name == 'doubleattack':
+      self.damagemod = 2
+      self.area = 'single'
+      self.target = 'enemy'
+      self.cooldown = 0
+      self.stat = 'strength'
+      who.spells[self.name] = self
+  def cast(self, who, monsterList, targt):
+    if self.area == 'single':
+      finaldmg = self.damagemod * who.intel
+      monsterList[targt].currenthp -=  finaldmg
+      print(f'{who.name} deals {finaldmg} damage to {monsterList[targt].name} with {self.name}!')
+      
+
+
+#Damage over time class
+#Probably add to spells class
+class Dots:
+  def __init__(self):
+    self.name = '0'
+    self.dotDuration = 0
+    self.dotDamage = 0
+    self.tickRate = 0
+    def bleed(self,duration,damage,tick_rate):
+      self.name = Bleed
+      self.dotDuration = duration
+      self.dotDamage = damage
+      self.tickRate = tick_rate
+      target.dots.append(self)
+
+#monster class
+class Monster:
+  def __init__(self, name):
+    self.name = name
+    self.level = hero.level
+    self.maxhp = self.level * 10
+    self.speed = 0
+    self.base_attack = 1
+    self.attack = self.Attack
+    self.attack_values = self.Attack.roll_values(self)
+    self.stren = 1
+    self.cc = 5
+    self.cd = 1.1
+    self.isHuman = 0
+    self.dots = []
+    self.currenthp = self.maxhp
+    self.armor = 1
+  class Attack:
+    #left blank for possible modifiers
+    def roll_values(self):
+      return [(self.base_attack), (self.base_attack * 1.5)]
+    def attack(self):
+      return round(r.uniform(self.attack_values[0],self.attack_values[1]),2)
+
+#Boss class - currently unused
+class Boss:
+  def __init__(self, name):
+    self.name = name
+    self.level = hero.level
+    self.maxhp = self.level * 120
+    self.base_attack = 1
+    self.attack = self.Attack
+    self.speed = 1
+    self.attack_values = self.attack.roll_values
+    self.stren = 1
+    self.cc = 5
+    self.cd = 1.1
+    self.isHuman = 0
+    self.dots = []
+    self.boss_attack = self.attack(self)
+    self.currenthp = self.maxhp
+    self.armor = 1
+  class Attack:
+    #left blank for possible modifiers
+    def roll_values(self):
+      return [(self.base_attack), (self.base_attack * self.level)]
+    def attack(self):
+      return round(r.uniform(self.attack_values[0],self.attack_values[1]),2)
+   
+
+      
+
+#Battle logic
+class Battle:
+  def __init__(self, heroes, monsters):
+    self.heroes = heroes
+    self.monsters = monsters
+    self.battleOrder = self.roll_initiative(self.heroes, self.monsters)
+  #need to rewrite here using itertools to iterate over same list while cached
+  def roll_initiative (self, party_list, monster_list):
+    battle_list = []
+    for x in monster_list:
+      battle_list.append(x)
+    for x in party_list:
+      battle_list.append(x)
+    return sorted(battle_list, key = lambda x:x.speed, reverse = True)
+
+  def battle(self):
+    self.herolist = self.heroes
+    self.monsterlist = self.monsters
+    self.deadMonsters = []
+    self.deadPlayers = []
+    battle_loop = 1
+    while battle_loop == 1:
+      for character in self.battleOrder:
+        if character.currenthp <= 0.00 and character.isHuman == 1 and character not in self.deadPlayers:
+          #print(f'{character.name} is slain!')
+          self.deadPlayers.append(character)
+        elif character.currenthp <= 0.00 and character.isHuman == 0 and character not in self.deadMonsters:
+          print(f'{character.name} is slain!')
+          self.deadMonsters.append(character)
+        elif character.isHuman == 1 and character.currenthp > 0:
+          player_turn(character, self.monsterlist, self.deadMonsters, self.herolist, self.deadPlayers)
+        elif character.isHuman == 0 and character.currenthp > 0:
+          print('monster turn')
+          #only attacks first player at the moment
+          damage = monster_turn(character)
+          #logic for later randomizing of party members, who to attack for monster
+          print(f'Monster deals {damage} to {self.herolist[0].name}!')
+          self.herolist[0].currenthp -= damage
+        if len(self.herolist) == len(self.deadPlayers):
+          print('Game over!')
+          battle_loop = 0
+        if len(self.monsterlist) == len(self.deadMonsters):
+          newdrop = Item()
+          newdrop.roll_stats()
+          newdrop.get_stats()
+          (hero.inventory).append(newdrop)
+          for heroes in self.herolist:
+            heroes.levelup()
+          battle_loop = 0
+    
+
+def player_turn(who, monsters, deadMonsters, party, deadPlayers):
+  back = 0
+  while back == 0:
+    clear(2)
+    print('Choose attack or spells.')
+    print(f'{who.name}\'s turn.')
+    print(f'{who.name} has {who.currenthp} health, and {who.currentmana} mana.')
+    print('Choose attack or spells.')
+    choice = input().lower()
+    if choice == 'attack':
+      damage_player, crit_value = who.attack.attack(who)
+      print('Choose a target to attack. Your options are:')
+      options = [monster for monster in monsters if monster not in deadMonsters]
+      for x in options:
+        print(f'Location of {x.name}: {monsters.index(x) + 1} and {x.name} health is {x.currenthp}')
+      choice = int(input()) - 1
+      if crit_value == 1:
+        print('Critical hit!')
+        damage_player *= who.cd
+      monsters[choice].currenthp -= round(damage_player, 2)
+      print(f'You deal {damage_player} damage to {monsters[choice].name}!')
+      return
+    elif choice == 'spells' or choice == 'spell' or choice == 'cast a spell' or choice == 'cast spells' or choice == 'cast':
+      print(f'{who.name} has {who.currentmana} mana left.')
+      print('Which spell would you like to cast? Your options are:')
+    for spell in who.spells:
+      print(f'{spell}' if who.spells[spell] != 0 else '')
+    spell = input().lower()
+    if spell == 'back':
+      back = 1
+    elif spell != 'back' and who.spells[spell] != 0:
+      if who.spells[spell].target == 'enemy':
+        print('This spell targets enemies. Choose a target. Your options are:')
+        options = [monster for monster in monsters if monster not in deadMonsters]
+        for x in options:
+          print(f'Location of {x.name}: {monsters.index(x) + 1} and {x.name} health is {x.currenthp}')
+        choice = int(input()) - 1
+        who.spells[spell].cast(who,monsters,choice)
+      elif who.spells[spell].target == 'ally':
+        print('This spell targets allies. Choose a target. Your options are:')
+        options = [friend for friend in party if friend not in deadPlayers]
+        for x in options:
+          print(f'Location of {x.name}: {party.index(x) + 1} and {x.name} health is {x.currenthp}')
+        choice = int(input()) - 1
+
+def monster_turn(who):
+  clear(2)
+  print(f'{who.name}\'s turn.')
+  print(f'{who.name} has {who.currenthp} health')
+  return who.attack.attack(who) 
+
+
+
+#turn logic
+"""
+def player_turn(who):
+  
+    elif choice =='spells':
+
+   
+      spell = input().lower()
+      if spell == 'back':
+        back = 1
+      elif spell != 'back' and hero.spells[spell] != 0:
+        if who.currentmana < 0:
+          print('You do not have enough mana to cast this spell. You have {who.currentmana} mana left.')
+        else:
+          print(f'You cast {spell}!')
+          return (herospells.cast(who, spell))
+      else:
+        print('Not a valid choice, please try again, spellloop')
+        back = 1
+
+
+ 
+"""
+
+
+
+
+
+#Game intro, player class selection and name. COMPLETE FOR NEXT VERSION
+def intro():
+  print('Please enter a class. Your options are Warrior, Ranger, or Mage.')
+  print('If you would like information on the classes, type info.')
+  class_selection = input().lower()
+  if class_selection == 'info':
+    print('Warriors gain +2 strength every level, and can specialize into warrior trees later.')
+    print('Rangers gain +1 dexterity and +1 strength every level, and can specialize into Ranger and Rogue trees later.')
+    print('Mages gain +2 intelligence every level, and can specialize into the magical trees later.')
+    intro()
+  elif class_selection == 'warrior':
+    hero.warrmod = 1
+  elif class_selection == 'ranger':
+    hero.rangermod = 1
+  elif class_selection == 'mage':
+    hero.magemod = 1
+  else:
+    print('Not an option, please try again')
+    intro()
+
+#main menu COMPLETE FOR NEXT VERSION
+def menu():
+  print('Choose where to go. Your options are Town, Battle, Inventory, Stats, or Quit.')
+  location = input().lower()
+  if location == 'town':
+    town(hero)
+  elif location == 'inventory':
+    inventory(hero)
+  elif location == 'stats':
+    stats(hero)
+  elif location == 'quit':
+    print('no quit logic yet! out of luck')
+  elif location == 'battle':
+    monsterlist = []
+    monsters = r.randint(0,10)
+    if monsters >= 9:
+      print('5 monsters appear!')
+      monsterlist.extend((Monster('yikes'), Monster('jeepers'), Monster('eek'), Monster('aaah'), Monster('Oowow')))
+    elif monsters >= 6 and monsters < 9:
+      print('3 monsters appear!')
+      monsterlist.extend((Monster('yikes'), Monster('Oof'), Monster('Ooowee')))
+    elif monsters < 6:
+      print('1 monster appears!')
+      monsterlist.append(Monster('yikes'))
+    battle_forest = Battle(hero.party, monsterlist)
+    battle_forest.battle()
+
+
+
+
+#stats method COMPLETE FOR NEXT VERSION
+def stats(who):
+  print(f'{who.name} is level {who.level}')
+  if who.warrmod == 1:
+    print(f'{who.name} is a warrior.')
+  elif who.rangermod == 1:
+    print(f'{who.name} is a ranger.')
+  elif who.magemod == 1:
+    print(f'{who.name} is a mage.')
+  else:
+    print(f'{who.name} does not have a class.')
+  print(f'Your base attack values roll between these two numbers: {who.attack_value}')
+  print(f'You have {who.skill_points} skill points.')
+  print(f'Your health is {who.currenthp} out of {who.maxhp}, and your Mana is {who.currentmana} out of {who.maxmana}')
+  print(f'You have {who.stren} strength, {who.dext} dexterity, and {who.intel} intelligence.')
+  print('The spells you have learned are:')
+  for key, value in who.spells.items():
+    if value != 0:
+      print(key)
+clear(2)
+
+#Inventory method. COMPLETE FOR NEXT VERSION
+def inventory(who):
+  print(f'{who} INVENTORY IS BELOW ***********************')
+  for x in who.inventory:
+    print(x.name)
+    clear(2)
+  print('INVENTORY IS ABOVE*********************')
+  print('Enter stats to check stats on gear, equip to add a piece, remove to remove a piece, or exit to leave inventory screen.')
+  choice = input().lower()
+  if choice == 'stats':
+    print('Enter the number of where the item is. If it\'s the first item, enter 1. Second, enter 2. Etc.')
+    print('If you would like to exit, simply enter any input that isn\'t a number. Will also exit if you don\'t have gear in that slot.')
+   # try:
+    inventory_select = int(input())-1
+    print(f'{((who.inventory)[inventory_select]).name}')
+    (who.inventory[inventory_select]).get_stats()
+  elif choice == 'equip':
+    print('Alright, choose a piece to equip. Enter 1 for first piece in inventory, 2 for second, etc.')
+    inv_slot = int(input())-1
+    ((who.inventory)[inv_slot]).equip(who)
+    print(f'You have equipped {(who.inventory)[inv_slot].name}')
+  elif choice == 'remove':
+    print('Alright choose a piece to remove. Your options are:')
+    for x in who.gear:
+      if who.gear[x] == 0:
+        print('Empty slot.')
+      else:
+        print(f'{(who.gear[x]).name} in slot {x}')
+    print('Enter a slot to remove... helm, chest, gloves, pants, boots')
+    removal = input()
+    if who.gear[removal] == 0:
+      print('You aren\'t wearing anything in that slot.')
+    elif removal not in hero.gear:
+      print('That\'s not a piece you can remove.')
+    else:
+      takeoff = who.gear[removal]
+      takeoff.dequip()
+
+
+
+#town logic COMPLETE FOR NEXT VERSION
+def town(who):
+  print('Choose where to go. Your only option right now is Trainer.')
+  place = input().lower()
+  if place == 'trainer':
+    print(f'It requires 1 skill point to learn a skill, {who.name} has {who.skill_points}. Which skill would you like to learn? Your options are:')
+    for spell in Spells.masterlist:
+      if who.spells[spell] == 0:
+        print(spell, ' ')
+    learn = input().lower()
+    if learn not in Spells.masterlist:
+      print('That\'s not a spell you can learn, or maybe it\'s not a spell at all.')
+    elif who.skill_points < 1:
+      print('You do not have enough skill points to learn anything.')
+    else:
+      who.spells[learn] = Spells(' ')
+      who.spells[learn].spellbook_add(who)
+      who.skill_points -= 1
+
+
+
+
+#mainloop
+print('Welcome, player.')
+print('Please enter your name.')
+hero = Player(input())
+intro()
+mainLoop = True
+while mainLoop:
+  clear(1)
+  clear(4)
+  menu()
