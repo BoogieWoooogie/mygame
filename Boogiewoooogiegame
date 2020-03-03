@@ -1,136 +1,754 @@
+#Changelog V0.42
+#Added some spells showing off new interactions
+#Stuns were not fixed in V0.41, stuns SHOULD be fixed now
+#You can NOW RUN AWAY FROM BATTLES AAAH YOU WUSS
+#added some pretty wild framework for buffs and debuffs. It involves a lot of copying past values and using current value placeholders for relevant data, so there could be bugs.
+#Added spells with very interesting functionality, every single specialization has some so feel free to try them all
+
+
+
+#Changelog V0.41
+#Changed descriptions of specs
+#Changed spell descriptions
+#Stuns were fixed
+#Lots of bugs fixed, everything else should function properly now...tentatively, I said that before and lots was broken
+#Monster health has been rebalanced, courtesy of Taylor's formulas
+#Player attacks have been rebalanced
+#Lots of framework changes have still not been tested, send any bugs to me.
+
+
+##TODO::
+#Stuns appear to add to duration additively- UNSURE IF STILL BUGGED AFTER REWORK 3/1/2020, MAY BE FIXED
+#Need to add Debuffs
+#1:Rolling initiative is currently placed in such a location that it needs to take lambda function for base_stats in order to work,
+#2:so it needs to be moved/adjusted somehow to account for speed debuffs. Speed debuffs will not work
+#Classes and specs probably best handled by a set, so that we can check the set against the dictionary for master spells quickly
+#You can't currently multi-attack groups. I think this is probably best because that would add a lot of time - UNSURE IF STILL THE CASE
+#Add to town
+
+#AoE will not hit enemy minions, if enemies have minions. Simple fix would probably be the monsters list gets minions appended to it as well as the battle order, checking if target not in party and target not in dead_monsters 
+#Add a recruiter, that adds random stat people to a list and you choose from the list
+
+
+#Add set pieces - check in legendary effect list if multiples of same value when equipped
+
+
+
+#Reminders and notes:
+#Random integers within dictionaries break the values because it's a deepcopy, they'll be randomized every time.
+#DoTs snapshot - This is not intentional but it is a desired feature, so we are leaving that the way it is
+#DoTs currently infinitely stack on targets, they are their own instances, not reapplied - DEIGNED INTENTIONAL - The fix for this would be to have DoTs as a SET as opposed to a LIST
+
+
+import time
 import random as r
 import math
-
+import copy
 
 #Added for clarity in text 
 def clear(lines):
   for x in range(lines):
-    print('**************************************')
+    print('**********************************')
 
 #playerclass
 class Player:
-  def __init__(self,name):
+  def __init__(self, name):
     self.name = name
     self.party = [self]
-    self.level = 1
     self.gear = {
                'helm' : 0,
                'chest' : 0,
                'gloves' : 0,
                'pants' : 0,
                'boots' : 0,
+               'ring' : 0,
+               'charm' : 0,
+               'necklace' : 0
     }
+    self.modifiers = {
+               'strength' : 1,
+               'dexterity' : 1,
+               'intelligence' : 1,
+               'damage' : 1,
+               'speed' : 1,
+               'attack' : 1,
+               'max resource' : 1,
+               'current resource' : 1,
+               'resource regeneration' : 1,
+               'attack resource regeneration' : 1,
+               'critical chance' : 1,
+               'critical damage' : 1,
+               'max health' : 1,
+               'current health' : 1,
+               'health regeneration' : 1,
+               'armour' : 1
+               }
+    self.base_stats = {
+               'level' : 1,
+               'strength' : 5,
+               'dexterity' : 5,
+               'intelligence' : 5,
+               'speed' : 2,
+               'stunned' : 0,
+               'silenced' : 0,
+               'resource' : 'blank',
+               'max resource' : 'blank',
+               'current resource' : 'blank',
+               'resource regeneration' : 'blank',
+               'attack resource regeneration' : 'blank',
+               'critical chance' : 5,
+               'critical damage' : 1.5,
+               'base attack' : 1,
+               'attack value' : [0, 5],
+               'max health' : 20,
+               'current health' : 20,
+               'health regeneration' : 0,
+               'armour' : 1
+               }
+    self.roll_attack()
     self.inventory = []
-    self.skill_points_max = 0
+    self.skill_points_max = 1
     self.skill_points = 1
     self.dots = []
-    self.maxmana = 10
-    self.speed = 2
     self.isHuman = 1
     self.buffs = []
-    self.debuffs = []
-    self.currentmana = self.maxmana
-    self.warrmod = 0
-    self.rangermod = 0
-    self.magemod = 0
-    self.stren = 5
-    self.dext = 5
-    self.intel = 5
-    self.spells = {
-              'fireball' : 0,
-              'heal' : 0,
-              'doubleattack' : 0
-    }
-    self.cc = 5
-    self.cd = 1.5
+    self.zone = 0
+    self.legendaries = []
+    self.stunned = 0
+    self.silenced = 0
+    self.class_mod = ' '
+    #may be a useless line self.spec = set()
+    self.spells = copy.deepcopy(Spells.spells)
     self.exper = 0
-    self.base_attack = 5
-    self.attack = self.Attack
-    self.attack_value = self.attack.roll_values(self)
-    self.maxhp = 20
-    self.currenthp = self.maxhp
-    self.armor = 1
-  class Attack:
-    #left blank for possible modifiers
-    def roll_values(self):
-      return [(self.base_attack), (self.base_attack * self.stren * 0.5 ) + (self.base_attack * self.dext*0.25)]
-    def attack(self):
-      crit_value = 0
-      if r.randint(0,100) <= self.cc:
-        crit_value = 1
-      return round(r.uniform(self.attack_value[0],self.attack_value[1]),2), crit_value
-  def tick(self):
-    removelist = []
-    if not self.dots:
-      return 0
+    
+  #need to add modifiers here, and add this to the tick method 
+  def roll_attack(self):
+    self.base_stats['attack value'] = (self.base_stats['base attack'] + ((self.base_stats['strength'] / 2)) + (self.base_stats['dexterity'] / 2)), (self.base_stats['base attack'] + (self.base_stats['strength'] + self.base_stats['dexterity']))
+
+  def class_fighter(self):
+    self.base_stats['resource regeneration'] = 1
+    self.base_stats['strength'] = 5 + self.base_stats['level'] * 2
+    self.class_mod = 'fighter'
+    self.base_stats['resource'] = 'rage'
+    self.base_stats['max resource'] = 6
+    self.base_stats['current resource'] = 0
+    self.base_stats['attack resource regeneration'] = 1
+    self.stats = copy.deepcopy(self.base_stats)
+  def class_ranger(self):
+    self.base_stats['resource regeneration'] = 0
+    self.base_stats['dexterity'] = 5 + self.base_stats['level'] * 1
+    self.base_stats['strength'] = 5 + self.base_stats['level'] * 1
+    self.class_mod = 'ranger'
+    self.base_stats['resource'] = 'energy'
+    self.base_stats['max resource'] = 10
+    self.base_stats['current resource'] = 10
+    self.base_stats['attack resource regeneration'] = 5
+    self.stats = copy.deepcopy(self.base_stats)
+  def class_mage(self):
+    self.base_stats['resource regeneration'] = 5
+    self.base_stats['intelligence'] = 5 + self.base_stats['level'] * 2
+    self.class_mod = 'mage'
+    self.base_stats['resource'] = 'magical power'
+    self.base_stats['max resource'] = 25
+    self.base_stats['current resource'] = 25
+    self.base_stats['attack resource regeneration'] = 0
+    self.stats = copy.deepcopy(self.base_stats)
+
+  #Update all values that scale from stats
+  def update_stats(self):
+    self.base_stats['max health'] = 20 + (self.stats['level'] * 1) + (self.stats['strength'] * 2)
+    self.base_stats['crit chance'] = 5 + (self.stats['dexterity'] * 0.3)
+    self.base_stats['base attack'] = ((self.stats['level']) * 1) + 1    
+    self.roll_attack()
+    self.skill_points_max = (self.stats['level'] * 2) + 1
+  #various if statements for class changes can go here  
+  def end_battle(self):
+    self.base_stats['current health'] = self.base_stats['max health']
+    if self.base_stats['resource'] == 'rage':
+      self.base_stats['current resource'] = 0
     else:
-      for x in self.dots:
-        if x.dotDuration == 0:
-          self.currenthp -= x.dotDamage
-          self.removelist.append(x)
-        elif x.dotDuration % x.tickRate == 0:
-          print(f'{x.name} ticks for {x.dotDamage} damage!')
-          self.currenthp -= x.dotDamage
-        x.dotDuration -= 1
-    for x in removelist:
-      if x in self.dots:
-        self.dots.remove(x)      
-  def add_stren(self, value):
-    self.stren += value
-    self.maxhp += value*2
-    self.currenthp += value*2
-    self.attack_value = self.attack.roll_values(self)
-  def add_dext(self,value):
-    self.dext += value
-    self.cc += value*0.3
-    self.attack_value = self.attack.roll_values(self)
-  def add_intel(self, value):
-    self.intel += value
-    self.attack_value = self.attack.roll_values(self)
+      self.base_stats['current resource'] = self.base_stats['max resource']
+    self.dots = []
+    self.buffs = []
+    #This line should reset all the mods
+    for modifiers, mod_value in self.modifiers.items():
+      mod_value = 1    
+    
+    
+
+
   def levelup(self):
-    self.level += 1
-    self.skill_points_max = self.level * 2
+    self.base_stats['level'] += 1
+    self.base_stats['base attack'] += 1
     self.skill_points += 2
-    self.base_attack += 1
-    self.currenthp = self.maxhp
+    if self.class_mod == 'fighter':
+      self.base_stats['strength'] += 2
+    elif self.class_mod == 'ranger':
+      self.base_stats['dexterity'] += 1
+      self.base_stats['strength'] += 1
+    elif self.class_mod == 'mage':
+      self.base_stats['intelligence'] += 2
     clear(3)
-    print('Congrats! You leveled to level ', self.level)
-    while self.skill_points != 0:
-      print(f'You have {self.skill_points} skill points left.')
-      print('Press 1 to add a stat, or 2 to save skill points. You need skill points to learn spells.')
-      loc = input()
-      if loc == '1':
-        print('1 for strength, 2 for dexterity, 3 for intelligence.')
-        stat = input()
-        if stat == '1':
-          print('How many points would you like to add?')
-          val = int(input())
-          if val > self.skill_points:
-            print('You do not have enough skill points to do that.')
-          else:
-            self.add_stren(val)
-            self.skill_points -= val
-        elif stat == '2':
-          print('How many points would you like to add?')
-          val = int(input())
-          if val > self.skill_points:
-            print('You do not have enough skill points to do that.')
-          else:
-            self.add_dext(val)
-            self.skill_points -= val
-        elif stat == '3':
-          print('How many points would you like to add?')
-          val = int(input())
-          if val > self.skill_points:
-            print('You do not have enough skill points to do that.')
-          else:
-            self.add_intel(val)
-            self.skill_points -= val
-      elif loc == '2':
-        print(f'You are saving {self.skill_points} point/points. Learn spells in town.')
-        self.attack_value = self.attack.roll_values(self)
-        break
-      self.attack_value = self.attack.roll_values(self)
+    print('Congrats! You leveled to level ', self.stats['level'])
+    self.spend_skill_points()
+  
+  def spend_skill_points(self):
+    if self.skill_points == 0:
+      print('You have no skill points left.')
+      return
+    print(f'{self.name} has {self.skill_points} points left.')
+    time.sleep(0.65)
+    print('Enter 1 to spend them, or 2 to save them.')
+    point_choice = input()
+    if point_choice == '2':
+      return
+    elif point_choice == '1':
+      print('Choose where to add the points to. Strength (s), dexterity (d), or intelligence (i)')
+      point_location = input().lower()
+      print('How many points would you like to spend?')
+      try:
+        point_amount = int(input())
+      except:
+        print('That\'s not a valid input, please use 1 2 3 4 format.')
+        time.sleep(0.75)
+        self.spend_skill_points()
+        return
+      if point_amount > self.skill_points:
+        print('You do not have enough skill points to do that.')
+        self.spend_skill_points()
+        return
+      else:
+        if point_location == 's' or point_location == 'strength':
+          self.base_stats['strength'] += point_amount
+          self.skill_points -= point_amount
+        elif point_location == 'd' or point_location == 'dexterity':
+          self.base_stats['dexterity'] += point_amount
+          self.skill_points -= point_amount
+        elif point_location == 'i' or point_location == 'intelligence':
+          self.base_stats['intelligence'] += point_amount
+          self.skill_points -= point_amount
+        else:
+          print('That\'s not a valid location.')
+          self.spend_skill_points()
+          return
+    self.update_stats()
+    return        
+
+
+
+class Minion:
+  def __init__(self, name, summoner):
+    self.name = name
+
+    
+
+    self.modifiers = {
+             'strength' : 1,
+             'dexterity' : 1,
+             'intelligence' : 1,
+             'damage' : 1,
+             'speed' : 1,
+             'attack' : 1,
+             'max resource' : 1,
+             'current resource' : 1,
+             'resource regeneration' : 1,
+             'attack resource regeneration' : 1,
+             'critical chance' : 1,
+             'critical damage' : 1,
+             'max health' : 1,
+             'current health' : 1,
+             'health regeneration' : 1,
+             'armour' : 1
+             }
+    self.base_stats = {
+               'level' : summoner.stats['level'],
+               'strength' : 5,
+               'dexterity' : 5,
+               'intelligence' : 5,
+               'speed' : 1,
+               'stunned' : 0,
+               'silenced' : 0,
+               'resource' : 'blank',
+               'max resource' : 'blank',
+               'current resource' : 'blank',
+               'resource regeneration' : 'blank',
+               'attack resource regeneration' : 'blank',
+               'critical chance' : 5,
+               'critical damage' : 1.5,
+               'base attack' : 5,
+               'attack value' : [0, 5],
+               'max health' : 20,
+               'current health' : 20,
+               'health regeneration' : 0,
+               'armour' : 1
+               }
+    self.roll_attack()
+    self.stunned = 0
+    self.isMinion = 1
+    self.isHuman = summoner.isHuman
+    self.spells = copy.deepcopy(Spells.spells)
+    self.dots = []
+    self.buffs = []
+    
+    if self.name == 'skeleton':
+      self.base_stats['max health'] = summoner.stats['level'] * 5
+      self.base_stats['current health'] = self.stats['max health']
+      self.base_stats['speed'] = summoner.stats['speed']
+      self.base_stats['strength'] = summoner.stats['intelligence']
+      self.base_stats['dexterity'] = summoner.stats['intelligence'] / 2
+      self.base_stats['intelligence'] = 1
+      self.base_stats['critical chance'] = 25
+      self.base_stats['critical damage'] = 1.5
+      self.base_stats['base attack'] = summoner.stats['intelligence'] / 2
+      self.roll_attack()
+      
+    if self.name == 'duplicate':
+      self.base_stats = copy.deepcopy(summoner.stats)
+      self.base_stats['current health'] = 1
+      self.base_stats['max health'] = 1
+      self.base_stats['attack'] = self.Attack
+      self.base_stats['attack value'] = self.attack.roll_values(self)
+      self.spells = copy.deepcopy(summoner.spells)
+      self.spells['duplicate'] = 0
+  def roll_attack(self):
+    self.base_stats['attack value'] = (self.base_stats['base attack'] + ((self.base_stats['strength'] / 2)) + (self.base_stats['dexterity'] / 2)), (self.base_stats['base attack'] + (self.base_stats['strength'] + self.base_stats['dexterity']))
+
+
+
+
+   
+
+class Spells:
+  #I believe this is an obsolete line
+  #masterlist = {'fireball', 'doubleattack', 'heal', 'firestorm', 'lacerate', 'hellfire', 'summon skeleton', 'duplicate', 'mark of flame', 'headbutt', 'headshot', 'barrage', 'rend', 'mind spike', 'mind blast', 'spike trap', 'snare', 'pommel strike'}
+  newmasterlist = {
+        'all_classes' : ['heal', 'fireball', 'firestorm', 'pommel strike'],
+        'fighter' : ['doubleattack', 'lacerate', 'headbutt', 'rend', 'enrage', 'execute', 'cleave', 'leading strike-BROKEN', 'flurry', 'reave', 'bloodletting-BROKEN', 'deep wound'],
+        'ranger' : ['headshot', 'barrage', 'snare', 'spike trap'],
+        'mage' : ['hellfire', 'summon skeleton', 'duplicate', 'mark of flame', 'mind spike', 'mind blast', 'mana tap', 'immolate', 'wildfire', 'conflagrate']
+  }
+
+  spells = {
+            'fireball' : 0,
+            'heal' : 0,
+            'doubleattack' : 0,
+            'firestorm' : 0,
+            'lacerate' : 0,
+            'hellfire' : 0,
+            'summon skeleton' : 0,
+            'duplicate': 0,
+            'mark of flame': 0,
+            'headbutt' : 0,
+            'rend' : 0,
+            'headshot' : 0,
+            'barrage' : 0,
+            'mind spike' : 0,
+            'mind blast' : 0,
+            'spike trap' : 0,
+            'snare' : 0,
+            'pommel strike' : 0,
+            'mana tap' : 0,
+            'enrage' : 0,
+            'immolate' : 0,
+            'wildfire' : 0,
+            'conflagrate' : 0,
+            'execute' : 0,
+            'cleave' : 0,
+            'reave' : 0,
+            'bloodletting' : 0, 
+            'leading strike' : 0,
+            'deep wound' : 0
+            
+  }
+
+
+  def __init__ (self, newname):
+    self.name = ' '
+    self.damagemod = 0
+    self.stun = 0
+    self.special_effect = 0
+    self.stat = 'blank'
+    self.desc = 'blank'
+#damagemod multiplies by your intelligence, or maybe damage from intelligence etc to get damage value
+    self.cooldown = 0
+    self.debuff = 0
+    self.critical_chance = 0
+    self.target = 'blank'
+    self.number_of_attacks = 1
+    self.area = 'blank'
+    self.buff = 0
+    self.dot = 0
+    self.minion = None
+    self.dot = 0
+#room for more modifiers
+#spellbook creates the object and adds it to players spells
+    if newname == 'fireball' or newname == 'fb':
+      self.name = 'fireball'
+      self.damagemod = 3
+      self.cost = 0
+      self.area = 'single'
+      self.damaged_stat = 'current health'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.desc = 'single enemy target, damages health, costs 0 mana, deals 3x intelligence'
+      self.cooldown = 0
+    elif newname == 'heal' or newname == 'he':
+      self.name = 'heal'
+      self.damagemod = 2.5
+      self.area = 'single'
+      self.cost = 0
+      self.damaged_stat = 'current health'
+      self.cooldown = 0
+      self.target = 'ally'
+      self.stat = 'intelligence'
+      self.desc = 'single friendly target, heals health, costs 0 mana, heals 2.5x intelligence'
+    elif newname == 'doubleattack' or newname == 'da':
+      self.name = 'doubleattack'
+      self.damagemod = 1
+      self.area = 'single'
+      self.cost = 1
+      self.target = 'enemy'
+      self.damaged_stat = 'current health'
+      self.cooldown = 0
+      self.stat = 'attack'
+      self.desc = 'single enemy target, attacks twice, costs 1 rage'
+      self.number_of_attacks = 2
+    elif newname == 'firestorm' or newname == 'fs':
+      self.name = 'firestorm'
+      self.damagemod = 1.5
+      self.cost = 0
+      self.damaged_stat = 'current health'
+      self.area = 'all'
+      self.target = 'enemy'
+      self.desc = 'all enemy targets, damages health, costs 0 mana, deals 1.5x intelligence'
+      self.stat = 'intelligence'
+    elif newname == 'lacerate' or newname == 'la':
+      self.name = 'lacerate'
+      self.damagemod = 1
+      self.cost = 1
+      self.area = 'single'
+      self.damaged_stat = 'current health'
+      self.target = 'enemy'
+      self.stat = 'strength'
+      self.desc = 'single enemy target, damages health, costs 1 rage, deals 1x strength, DoT description not pulled-- '
+      self.dot = Dots('lacerate')
+    elif newname == 'hellfire' or newname == 'hf':
+      self.name = 'hellfire'
+      self.cost = 5
+      self.damaged_stat = 'current health'
+      self.damagemod = 1
+      self.area = 'single'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.desc = 'single enemy target, damages health, costs 5 magical power, deals 1x intelligence, high damage DoT '
+      self.dot = Dots('hellfire')
+    elif newname == 'summon skeleton' or newname == 'ss':
+      self.name = 'summon skeleton'
+      self.damaged_stat = 'current health'
+      self.cost = 3
+      self.target = 'none'
+      self.area = 'none'
+      self.minion = 'skeleton'
+      self.desc = 'Summons a skeletal ally to help you fight. Scales with Intelligence'
+      self.stat = 'intelligence'
+    elif newname == 'duplicate':
+      self.name = 'duplicate'
+      self.cost = 5
+      self.damaged_stat = 'current health'
+      self.target = 'none'
+      self.area = 'none'
+      self.minion = 'duplicate'
+      self.desc = 'Summons a duplicate of yourself, with all the same spells and intelligence, but only 1 health.'
+      self.stat = 'intelligence'
+    elif newname == 'mark of flame':
+      self.name = 'mark of flame'
+      self.damaged_stat = 'current health'
+      self.cost = 7
+      self.target = 'enemy'
+      self.area = 'all'
+      self.dot = Dots('mark of flame')
+      self.desc = 'Afflicts all targets with a powerful damage over time effect'
+      self.stat = 'intelligence'
+    elif newname == 'headbutt':
+      self.name = 'headbutt'
+      self.damaged_stat = 'current health'
+      self.cost = 2
+      self.target = 'enemy'
+      self.area = 'single'
+      self.damagemod = 1
+      self.stun = 1
+      self.desc = 'Headbutts the target, dealing regular damage and inflicting a stun for 1 turn.'
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+    elif newname == 'headshot':
+      self.name = 'headshot'
+      self.damaged_stat = 'current health'
+      self.cost = 3
+      self.area = 'single'
+      self.target = 'enemy'
+      self.damagemod = 1.25
+      self.stun = 0
+      self.desc = 'Fires an arrow at the targets head, dealing 1.25x damage.'
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+    elif newname == 'barrage':
+      self.name = 'barrage'
+      self.damaged_stat = 'current health'
+      self.area = 'all'
+      self.cost = 2
+      self.target = 'enemy'
+      self.damagemod = 1
+      self.stun = 0
+      self.desc = 'Fires a volley of arrows, hitting every enemy target once.'
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+    elif newname == 'rend':
+      self.name = 'rend'
+      self.damaged_stat = 'current health'
+      self.area = 'single'
+      self.cost = 4
+      self.damagemod = 2.5
+      self.target = 'enemy'
+      self.desc = 'Rends the target, dealing high damage with a low damage over time component.'
+      self.stat = 'strength'
+      self.dot = Dots('rend')
+    elif newname == 'mind spike':
+      self.name = 'mind spike'
+      self.target = 'enemy'
+      self.cost = 2
+      self.damaged_stat = 'current health'
+      self.area = 'single'
+      self.damagemod = 0
+      self.stun = 2
+      self.desc = 'Spikes the targets mind, inflicting a stun for 2 turns.'
+      self.stat = 'intelligence'
+    elif newname == 'mind blast':
+      self.name = 'mind blast'
+      self.target = 'enemy'
+      self.cost = 10
+      self.area = 'all'
+      self.damaged_stat = 'current health'
+      self.damagemod = 0
+      self.stun = 1
+      self.desc = 'Blasts the minds of every enemy, inflicting a stun for 1 turn.'
+      self.stat = 'intelligence'
+    elif newname == 'snare':
+      self.name = 'snare'
+      self.target = 'enemy'
+      self.cost = 4
+      self.area = 'single'
+      self.damaged_stat = 'current health'
+      self.damagemod = 0
+      self.stun = 2
+      self.desc = 'Snares the target, stunning them for 2 rounds.'
+      self.stat = 'dexterity'
+    elif newname == 'spike trap':
+      self.name = 'spike trap'
+      self.target = 'enemy'
+      self.area = 'single'
+      self.cost = 2
+      self.damaged_stat = 'current health'
+      self.damagemod = 0
+      self.stun = 2
+      self.desc = 'Somehow, the target walked into a trap you set from earlier! Stuns one round and applies bleed.'
+      self.stat = 'dexterity'
+      self.dot = Dots('spike trap')
+    elif newname == 'pommel strike':
+      self.name = 'pommel strike'
+      self.area = 'single'
+      self.stat = 'strength'
+      self.cost = 0
+      self.target = 'enemy'
+      self.damaged_stat = 'current health'
+      self.damagemod = 0
+      self.stun = 1
+      self.desc = 'Hits the target with your pommel, dealing no damage but applying a stun for one round.'
+    elif newname == 'mana tap':
+      self.name = 'mana tap'
+      self.area = 'self'
+      self.stat = 'max resource'
+      self.cost = 0
+      self.target = 'self'
+      self.damaged_stat = 'current resource'
+      self.damagemod = 1
+      self.desc = 'Gains magical power equal to your maximum magical power.'
+    elif newname == 'enrage':
+      self.name = 'enrage'
+      self.area = 'self'
+      self.stat = 'max resource'
+      self.cost = 0
+      self.target = 'self'
+      self.damaged_stat = 'current resource'
+      self.damagemod = 1
+      self.desc = 'Gains a full bar of rage.'
+    elif newname == 'immolate':
+      self.name = 'immolate'
+      self.area = 'single'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.cost = 5
+      self.damaged_stat = 'current health'
+      self.damagemod = 1
+      self.desc = 'Single target enemy DoT, Cost 5 Magical Power, 1x intelligence, DoT NP'
+      self.dot = Dots('immolate')
+    elif newname == 'wildfire':
+      self.name = 'wildfire'
+      self.area = 'single'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.cost = 20
+      self.damaged_stat = 'current health'
+      self.damagemod = 0.5
+      self.desc = 'Single target, cost 20 MP, deals 0.5x intelligence, spreads all dots to all targets'
+      self.special_effect = 'spread'
+    elif newname == 'conflagrate':
+      self.name = 'conflagrate'
+      self.area = 'single'
+      self.target = 'enemy'
+      self.stat = 'intelligence'
+      self.cost = 15
+      self.damaged_stat = 'current health'
+      self.damagemod = 1
+      self.desc = 'Single enemy target, costs 15 MP, deals 1x intelligence. Forces all DoTs to tick on target immediately.'
+      self.special_effect = 'tick'
+    elif newname == 'execute':
+      self.name = 'execute'
+      self.target = 'enemy'
+      self.area = 'single'
+      self.stat = 'attack'
+      self.cost = 6
+      self.damaged_stat = 'current health'
+      self.damagemod = 3
+      self.desc = 'Single enemy target, costs 6 rage, deals a normal damage roll x3 to target'
+    elif newname == 'cleave':
+      self.name = 'cleave'
+      self.target = 'enemy'
+      self.area = 'all'
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+      self.cost = 2
+      self.damaged_stat = 'current health'
+      self.damagemod = 1
+      self.desc = 'All enemy targets, costs 2 rage, deals a normal attack to all enemies.'  
+#    elif newname == 'leading strike':
+#      self.name = 'leading strike'
+#      self.target = 'enemy'
+#      self.area = 'single'
+#      self.stat = 'attack'
+#      self.number_of_attacks = 1
+#      self.cost = 0
+#Leading strike needs to be a buff that adds rage generation for 1 turn or something
+    elif newname == 'reave':
+      self.name = 'reave'
+      self.area = 'all'
+      self.target = 'enemy'
+      self.dot = Dots('rend')
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+      self.cost = 2 
+      self.damaged_stat = 'current health'
+      self.damagemod = 1
+      self.desc = 'All enemy targets, 2 rage, 1 attack per enemy at 1x damage, applies Rend to all enemies.' 
+    elif newname == 'flurry':
+      self.name = 'flurry'
+      self.damagemod = 1
+      self.area = 'single'
+      self.cost = 5
+      self.target = 'enemy'
+      self.damaged_stat = 'current health'
+      self.cooldown = 0
+      self.stat = 'attack'
+      self.desc = 'single enemy target, attacks five times, costs 5 rage'
+      self.number_of_attacks = 5    
+    elif newname == 'deep wound':
+      self.name = 'deep wound'
+      self.damagemod = 1
+      self.area = 'single'
+      self.critical_chance= 100
+      self.target = 'enemy'
+      self.damaged_stat = 'current health'
+      self.stat = 'attack'
+      self.number_of_attacks = 1
+      self.dot = Dots('rend')
+      self.desc = 'single enemy target, 4 rage, applies rend, guaranteed critical'
+
+  def spellbook_add(self, who):
+    if self.dot != 0:
+      self.dot.add_dot(who)  
+    who.spells[self.name] = self
+
+
+
+
+    
+
+#Damage over time class
+#Probably add to spells class
+class Dots:
+  def __init__(self, name):
+    self.duration = 0
+    self.dot_damage_mod = 0
+    self.damaged_stat = ' '
+    self.stat = 'null'
+    self.tick_rate = 0
+    self.applicator = 0
+    self.extra_effect = 0
+
+    if name == 'lacerate':
+      self.name = 'lacerate'
+      self.duration = 4
+      self.damaged_stat = 'current health'
+      self.dot_damage_mod = 0.5
+      self.stat = 'strength'
+      self.tick_rate = 1
+    elif name == 'hellfire':
+      self.name = 'Hellfire'
+      self.duration = 2
+      self.damaged_stat = 'current health'
+      self.dot_damage_mod = 2.0
+      self.stat = 'intelligence'
+      self.tick_rate = 1
+    elif name == 'mark of flame':
+      self.name = 'Mark of Flame'
+      self.duration = 4
+      self.damaged_stat = 'current health'
+      self.dot_damage_mod = 1.5
+      self.stat = 'intelligence'
+      self.tick_rate = 1
+    elif name == 'rend':
+      self.name = 'Rend'
+      self.duration = 2
+      self.damaged_stat = 'current health'
+      self.damage_mod = 0.5
+      self.stat = 'strength'
+      self.tick_rate = 1
+    elif name == 'spike trap':
+      self.name = 'Spike trap'
+      self.damaged_stat = 'current health'
+      self.duration = 4
+      self.dot_damage_mod = 1
+      self.stat = 'dexterity'
+      self.tick_rate = 1
+    elif name == 'immolate':
+      self.name = 'Immolate'
+      self.damaged_stat = 'current health'
+      self.duration = 6
+      self.dot_damage_mod = 1
+      self.stat = 'intelligence'
+      self.tick_rate = 1
+
+  def add_dot(self, who):
+    self.applicator = who
+
+
+class Buffs:
+  def __init__(self, name):
+    self.buff_duration = 0
+    self.target = ' '
+    self.stat = ' '
+    self.mod = 0
+    #mod is a value of +0.20 for 20% increase, to player modded stat value
+
 
 
 #Item creation
@@ -138,153 +756,263 @@ class Player:
 class Item:
   def __init__ (self):
     self.slot = ''
-    self.name = ''
-    self.level = hero.level
-    self.stren = 0
-    self.dext = 0
-    self.intel = 0
-    self.atk = 0
+    self.name = ' '
+    self.requirement = 0
+    self.stats = {
+             'level' : hero.base_stats['level'],
+             'strength' : 0,
+             'dexterity' : 0,
+             'intelligence' : 0,
+             'resource' : 0,
+             'max resource' : 0,
+             'current resource' : 0,
+             'resource regeneration' : 0,
+             'attack resource regeneration' : 0,
+             'crit chance' : 0,
+             'crit damage' : 0,
+             'base attack' : 0,
+             'max health' : 0,
+             'health regeneration' : 0,
+             'armour' : 0
+               }
+    self.description = ''
+    self.legendary_effect = ''
+    
+  def legendary_blaze(self):
+    self.name = 'Blaze'
+    self.stats['intelligence'] = 15
+    self.slot = 'charm'
+    self.description = 'Fireball now damages all enemy targets.'
+    self.legendary_effect = 'blaze'
+  def legendary_redemption(self):
+    self.name = 'Redemption'
+    self.stats['intelligence'] = 5
+    self.stats['strength'] = 10
+    self.slot = 'helm'
+    self.description = 'You gain massive health regeneration.'
+    self.legendary_effect = 'redemption'
+  def legendary_godhand(self):
+    self.name = 'Hand of God'
+    self.stats['strength'] = 40
+    self.slot = 'ring'
+    self.description = 'Your attacks strike with the righteous power of God.'
+    self.legendary_effect = 'godhand'
+  def legendary_inferno(self):
+    self.name = 'Inferno'
+    self.stats['intelligence'] = 5
+    self.slot = 'charm'
+    self.description = 'Your firestorm hits for 250% more damage.'
+    self.legendary_effect = 'inferno'
+  def legendary_necromancer_ring(self):
+    self.name = 'Necromancer\'s Ring'
+    self.stats['intelligence'] = 2
+    self.slot = 'ring'
+    self.legendary_effect = 'necromancer_ring'
+    self.description = 'Your hellfire summons a skeleton.'
+  #Currently not implemented
+  def legendary_suffering(self):
+    self.name = 'Suffering'
+    self.stats['strength'] = 3
+    self.slot = 'charm'
+    self.description = 'Your double attack applies Lacerate damage over time effects.'
+    self.legendary_effect = 'suffering'
+
   def roll_stats(self):
-    itemroll = r.randint(0,4)
-    if itemroll == 0:
+    itemroll = r.randint(0,100)
+    legendary_roll = r.randint(0,100)
+    if legendary_roll < 49:
+      legendary_effect_roll = r.randint(0,100)
+      if legendary_effect_roll <= 20:
+        self.legendary_blaze()
+        return
+      elif legendary_effect_roll <= 40:
+        self.legendary_redemption()
+        return
+      elif legendary_effect_roll <= 60:
+        self.legendary_godhand()
+      elif legendary_effect_roll <= 80:
+        self.legendary_inferno()  
+        return
+      elif legendary_effect_roll <= 100:
+        self.legendary_necromancer_ring()
+        return
+    elif itemroll <= 13:
       self.name, self.slot = 'helm', 'helm'
-    elif itemroll == 1:
+    elif itemroll > 13 and itemroll <= 26:
       self.name, self.slot = 'chest', 'chest'
-    elif itemroll == 2:
+    elif itemroll > 26 and itemroll <= 39:
       self.name, self.slot = 'gloves', 'gloves'
-    elif itemroll == 3:
+    elif itemroll > 39 and itemroll <= 52:
       self.name, self.slot = 'pants', 'pants'
-    elif itemroll == 4:
+    elif itemroll > 52 and itemroll <= 65:
       self.name, self.slot = 'boots', 'boots'
-    strength_roll = r.randint(self.level * 3, 100)
-    dexterity_roll = r.randint(self.level*3, 100)
-    intelligence_roll = r.randint(self.level*3, 100)
+    elif itemroll > 65 and itemroll <= 78:
+      self.name, self.slot = 'ring', 'ring'
+    elif itemroll > 78 and itemroll <= 91:
+      self.name, self.slot = 'charm', 'charm'
+    elif itemroll > 91:
+      self.name, self.slot = 'necklace', 'necklace'
+    strength_roll = r.randint(self.stats['level'] * 3, 100)
+    dexterity_roll = r.randint(self.stats['level'] *3, 100)
+    intelligence_roll = r.randint(self.stats['level']*3, 100)
     if strength_roll > 50:
-      self.stren += r.randint((math.floor(self.level*0.5)), self.level*2)
+      self.stats['strength'] += r.randint((math.floor(self.stats['level']*0.5)), self.stats['level']*2)
     if dexterity_roll > 50:
-      self.dext += r.randint((math.floor(self.level*0.5)), self.level*2)
+      self.stats['dexterity'] += r.randint((math.floor(self.stats['level']*0.5)), self.stats['level']*2)
     if intelligence_roll > 50:
-      self.intel += r.randint((math.floor(self.level*0.5)), self.level*2)
-    if self.stren >= 5:
+      self.stats['intelligence'] += r.randint((math.floor(self.stats['level']*0.5)), self.stats['level']*2)
+
+    if self.stats['strength'] >= 5:
       self.name += ' of strength'
-    if self.dext >= 5:
+    if self.stats['dexterity'] >= 5:
       self.name += ' of dexterity'
-    if self.intel >= 5:
+    if self.stats['intelligence'] >= 5:
       self.name += ' of intelligence'
+
+      
   def get_stats(self):
     clear(1)
     print(self.name)
-    print(f'{self.stren} strength')
-    print(f'{self.dext} dexterity')
-    print(f'{self.intel} intelligence')
-    return 0
+    print(f'Goes in the {self.slot} slot.')
+    print(self.description)
+    for keys, values in self.stats.items():
+      if values != 0:
+        print(f'{values} {keys}')
+
+        
   def equip(self, who):
-    if hero.gear[self.slot] != 0:
+    if who.gear[self.slot] != 0:
       print('You must remove the other piece in that slot first.')
       return 0
     else:
-      hero.gear[self.slot] = self
-      hero.add_stren(self.stren)
-      hero.add_dext(self.dext)
-      hero.add_intel(self.intel)
-      return 0
-  def dequip(self):
-    (hero.gear[self.slot]) = 0
-    hero.add_stren(0-(self.stren))
-    hero.add_dext(0-(self.dext))
-    hero.add_intel(0-(self.intel))
+      for key, value in self.stats.items():
+        if value != 0:
+          who.base_stats[key] += value     
+      who.gear[self.slot] = self
+      if self.legendary_effect == 'blaze':
+        blaze_add(who)
+        return
+      if self.legendary_effect == 'redemption':
+       redemption_add(who)
+       return
+      if self.legendary_effect == 'inferno':
+        inferno_add(who)
+      if self.legendary_effect == 'necromancer_ring':
+        necromancer_ring_add(who)
+        
+  def dequip(self, who):
+    if who.gear[self.slot] == 0:
+      print('You have nothing in that slot.')
+      return
+    else:
+      for keys, values in self.stats.items():
+        if value != 0:
+             who.base_stats[key] -= value  
+    who.gear[self.slot] = 0
+    if self.legendary_effect == 'blaze':
+      blaze_remove(who)
+      return
+    if self.legendary_effect == 'redemption':
+      redemption_remove(who)
+    if self.legendary_effect == 'inferno':
+      inferno_remove(who)
+    if self.legendary_effect == 'necromancer ring':
+      necromancer_ring_remove(who)
 
-#spellsclass ADD A COUPLE NEW SPELLS
-class Spells:
-  masterlist = {'fireball', 'doubleattack', 'heal'}
-  def __init__ (self, name):
-    self.name = name
-    self.damagemod = 0
-    self.stat = 'blank'
-#damagemod multiplies by your intelligence, or maybe damage from intelligence etc to get damage value
-    self.cooldown = 0
-    self.debuff = 0
-    self.target = 'blank'
-    self.area = 'blank'
-    self.buff = 0
-    self.dot = 0
-    #room for more modifiers
-#spellbook creates the object and adds it to players spells
-  def spellbook_add(self, who):
-    if self.name == 'fireball':
-      self.damagemod = 1.5
-      self.area = 'single'
-      self.target = 'enemy'
-      self.stat = 'intelligence'
-      self.cooldown = 0
-      who.spells[self.name] = self
-    elif self.name == 'heal':
-      self.damagemod = 2.5
-      self.area = 'single'
-      self.cooldown = 0
-      self.target = 'ally'
-      self.stat = 'intelligence'
-      who.spells[self.name] = self
-    elif self.name == 'doubleattack':
-      self.damagemod = 2
-      self.area = 'single'
-      self.target = 'enemy'
-      self.cooldown = 0
-      self.stat = 'strength'
-      who.spells[self.name] = self
-  def cast(self, who, monsterList, targt):
-    if self.area == 'single':
-      finaldmg = self.damagemod * who.intel
-      monsterList[targt].currenthp -=  finaldmg
-      print(f'{who.name} deals {finaldmg} damage to {monsterList[targt].name} with {self.name}!')
       
+#LEGENDARIES / LEGENDARY EFFECTS
+def blaze_add(who):
+  if who.spells['fireball'] != 0:
+    who.spells['fireball'].area = 'all'
+    who.legendaries.append('blaze')
+def blaze_remove(who):
+  if who.spells['fireball'] != 0:
+    who.spells['fireball'].area = 'single'
+    who.legendaries.remove('blaze')
+def redemption_add(who):
+  who.legendaries.append('redemption')
+def redemption_remove(who):
+  who.legendaries.remove('redemption')
+def inferno_add(who):
+  if who.spells['firestorm'] != 0:
+    who.spells['firestorm'].damageMod = 3.75
+    who.legendaries.append('inferno')
+def inferno_remove(who):
+  if who.spells['firestorm'] != 0:
+    who.spells['firestorm'].damageMod = 1.5
+    who.legendaries.remove('inferno')
+def necromancer_ring_add(who):
+  if who.spells['hellfire'] != 0:
+    who.spells['hellfire'].minion = 'skeleton'
+    who.legendaries.append('necromancer_ring')
+def necromancer_ring_remove(who):
+  if who.spells['hellfire'] != 0:
+    who.spells['hellfire'].minion = None
+    who.legendaries.remove('necromancer_ring')
+  
 
 
-#Damage over time class
-#Probably add to spells class
-class Dots:
-  def __init__(self):
-    self.name = '0'
-    self.dotDuration = 0
-    self.dotDamage = 0
-    self.tickRate = 0
-    def bleed(self,duration,damage,tick_rate):
-      self.name = Bleed
-      self.dotDuration = duration
-      self.dotDamage = damage
-      self.tickRate = tick_rate
-      target.dots.append(self)
+        
 
 #monster class
 class Monster:
-  def __init__(self, name):
+  def __init__(self, name, power):
     self.name = name
-    self.level = hero.level
-    self.maxhp = self.level * 10
-    self.speed = 0
-    self.base_attack = 1
-    self.attack = self.Attack
-    self.attack_values = self.Attack.roll_values(self)
-    self.stren = 1
-    self.cc = 5
-    self.cd = 1.1
-    self.isHuman = 0
-    self.dots = []
-    self.currenthp = self.maxhp
-    self.armor = 1
-  class Attack:
-    #left blank for possible modifiers
-    def roll_values(self):
-      return [(self.base_attack), (self.base_attack * 1.5)]
-    def attack(self):
-      return round(r.uniform(self.attack_values[0],self.attack_values[1]),2)
 
-#Boss class - currently unused
+    self.modifiers = {
+               'strength' : 1,
+               'dexterity' : 1,
+               'intelligence' : 1,
+               'damage' : 1,
+               'speed' : 1,
+               'attack' : 1,
+               'max resource' : 1,
+               'current resource' : 1,
+               'resource regeneration' : 1,
+               'attack resource regeneration' : 1,
+               'critical chance' : 1,
+               'critical damage' : 1,
+               'max health' : 1,
+               'current health' : 1,
+               'health regeneration' : 1,
+               'armour' : 1
+               }
+
+    self.base_stats = {
+        'power' : power,
+        'level' : power,
+        'max health' : (power * 10) * hero.base_stats['level'],
+        'health regeneration' : 0,
+        'resource regeneration' : 0,
+        'current resource' : 0,
+        'max resource' : 0,
+        'resource' : 'blank',     
+        'speed' : 0,
+        'base attack' : 0 + power,
+        'attack values' : [0, 2],
+        'strength' : 1,
+        'critical chance' : 5,
+        'critical damage' : 1.5,
+        'current health' : power * 15,
+        'armour' : 1
+        
+        }
+    self.stats = copy.deepcopy(self.base_stats)
+    self.base_stats['attack values'] =[(self.base_stats['base attack']), (self.base_stats['base attack'] * 1.5)] 
+    self.stunned = 0
+    self.isHuman = 0
+    self.buffs = []
+    self.dots = []
+  def attack(self):
+    return round(r.uniform(self.base_stats['attack values'][0],self.base_stats['attack values'][1]),2)
+
+#Boss class - currently unused and wrong
 class Boss:
   def __init__(self, name):
     self.name = name
     self.level = hero.level
     self.maxhp = self.level * 120
+    self.stunned = 0
     self.base_attack = 1
     self.attack = self.Attack
     self.speed = 1
@@ -300,285 +1028,610 @@ class Boss:
   class Attack:
     #left blank for possible modifiers
     def roll_values(self):
-      return [(self.base_attack), (self.base_attack * self.level)]
+      return [(self.base_attack * self.level) + (self.base_attack * (self.level + self.stren))]
     def attack(self):
       return round(r.uniform(self.attack_values[0],self.attack_values[1]),2)
    
 
       
-
 #Battle logic
 class Battle:
   def __init__(self, heroes, monsters):
     self.heroes = heroes
+    for x in self.heroes:
+      x.stats = copy.deepcopy(x.base_stats)
     self.monsters = monsters
-    self.battleOrder = self.roll_initiative(self.heroes, self.monsters)
   #need to rewrite here using itertools to iterate over same list while cached
+  def monster_generation(self):
+    monster_generation = r.randint(0,10)
+    monster_strength = self.heroes[0].base_stats['level'] * 2
+    if monster_generation >= 9:
+      print('5 monsters appear!')
+      monster_strength /= 3
+      self.monsters.extend((Monster('yikes', monster_strength), Monster('jeepers', monster_strength), Monster('eek', monster_strength), Monster('aaah', monster_strength), Monster('Oowow', monster_strength)))
+    elif monster_generation >= 6 and monster_generation < 9:
+      monster_strength /= 2  
+      print('3 monsters appear!')
+      self.monsters.extend((Monster('yikes', monster_strength), Monster('Oof', monster_strength), Monster('Ooowee', monster_strength)))
+    elif monster_generation < 6:
+      print('1 monster appears!')
+      self.monsters.append(Monster('yikes', monster_strength))
+    #todo - create monster generation
   def roll_initiative (self, party_list, monster_list):
     battle_list = []
     for x in monster_list:
       battle_list.append(x)
     for x in party_list:
       battle_list.append(x)
-    return sorted(battle_list, key = lambda x:x.speed, reverse = True)
+    return sorted(battle_list, key = lambda x:x.base_stats["speed"], reverse = True)
+
+
+  def buff_tick(self, who):
+    health_placeholder = who.stats['current health']
+    resource_placeholder = who.stats['current resource']
+    who.stats = copy.deepcopy(who.base_stats)
+    who.stats['current health'] = health_placeholder
+    who.stats['current resource'] = resource_placeholder
+    if who.stats['current health'] > who.stats['max health']:
+      who.stats['current health'] = who.stats['max health']
+    if who.stats['current resource'] > who.stats['max resource']:
+      who.stats['current resource'] = who.stats['max resource']
+
+    if who.stats['current health'] > who.stats['max health']:
+      who.stats['current health'] = who.stats['max health']
+
+  def cast(self, who, spell):
+    cast_loop = True
+    spell = who.spells[spell]
+    who.stats['current resource'] -= spell.cost
+    while cast_loop == True:
+      if spell.minion is not None:    
+        new_minion = Minion(spell.minion, who)
+        print(f'You summon a {new_minion.name}!')
+        self.battle_order.append(new_minion)
+        if spell.target == 'none':
+          return
+       #single target enemy spells
+      if spell.area == 'self' or spell.target == 'self':
+        damage = spell.damagemod * (who.stats[spell.stat] * who.modifiers[spell.stat])
+        who.stats[spell.damaged_stat] += damage
+        print(f'{who.name}\'s {spell.damaged_stat} gains {damage}!')
+        cast_loop = False
+      if spell.area == 'single' and spell.target == 'enemy':
+        options = [monster for monster in self.monsters if monster not in self.dead_monsters]
+        for x in options:
+          print(f'Location of {x.name}: {self.monsters.index(x) + 1} and {x.name} health is {round(x.stats["current health"],2)}')
+        print('Choose a target.')
+        #This line will bug if not input integer
+        target = int(input().lower()) - 1
+    #Can add new types of damage here
+        if spell.special_effect == 'spread':
+          if not self.monsters[target].dots:
+            pass
+          else:
+            for dot in self.monsters[target].dots:
+              for monsters_dot in self.monsters:
+                if monsters_dot in self.dead_monsters or monsters_dot == self.monsters[target]:
+                  pass
+                else:
+                  monsters_dot.dots.append(dot)
+
+        if spell.special_effect == 'tick':
+          self.tick(self.monsters[target], 'spell')
+        if spell.stat != 'attack' and self.monsters[target] not in self.dead_monsters:
+          damage = spell.damagemod * (who.stats[spell.stat]  * who.modifiers[spell.stat])
+          if r.randint(0,100) <= (who.stats['critical chance'] * who.modifiers['critical chance'])  + spell.critical_chance :
+            print('Critical hit!')
+            damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])         
+          self.monsters[target].stats[spell.damaged_stat] -= damage
+          print(f'{self.monsters[target].name}\'s {spell.damaged_stat} takes {damage} damage!')
+          if self.monsters[target].stats['current health'] <= 0:
+            self.dead_monsters.append(self.monsters[target])
+            print(f'{self.monsters[target].name} has been slain!')
+            return
+          cast_loop = False
+          if spell.stun != 0:
+            self.monsters[target].stunned = spell.stun
+            print(f'{self.monsters[target].name} is stunned for {spell.stun} turns!')
+          if spell.dot != 0:
+            self.monsters[target].dots.append(spell.dot)                          
+        elif spell.stat == 'attack' and self.monsters[target] not in self.dead_monsters:
+          for x in range(spell.number_of_attacks):
+            damage = round(r.uniform(who.stats['attack value'][0],who.stats['attack value'][1]),2) * who.modifiers['attack']
+            if r.randint(0,100) <= (who.stats['critical chance'] * who.modifiers['critical chance']) + spell.critical_chance :
+              print('Critical hit!')
+              damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])      
+            damage *= spell.damagemod
+            self.monsters[target].stats[spell.damaged_stat] -= damage
+            print(f'{self.monsters[target].name}\'s {spell.damaged_stat} takes {damage} damage!')
+            if self.monsters[target].stats['current health'] <= 0:
+              self.dead_monsters.append(self.monsters[target])
+              print(f'{self.monsters[target].name} has been slain!')
+              return
+            cast_loop = False
+            time.sleep(0.5)
+          if spell.stun != 0:
+            self.monsters[target].stunned = spell.stun
+            print(f'{self.monsters[target].name} is stunned for {spell.stun} turns!')
+          if spell.dot != 0:
+            self.monsters[target].dots.append(spell.dot)
+
+     #single target allied spells
+      elif spell.area == 'single' and spell.target == 'ally':
+        options = [hero for hero in self.heroes if hero not in self.dead_players]
+        for x in options:
+          print(f'Location of {x.name}: {self.heroes.index(x) + 1} and {x.name} health is {round(x.stats["current health"],2)}')
+        print('Choose a target.')
+        target = int(input().lower()) - 1
+        if spell.stat != 'attack':
+          damage = spell.damagemod * (who.stats[spell.stat] * who.modifiers[spell.stat])
+          if r.randint(0,100) <= (who.stats['critical chance'] * who.modifiers['critical chance']) + spell.critical_chance:
+            print('Critical hit!')
+            damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])             
+          if  self.heroes[target].stats['current health'] + damage > self.heroes[target].stats['max health']:
+            damage = self.heroes[target].stats['max health'] - self.heroes[target].stats['current health'] ######## minus max from current health or something 
+          self.heroes[target].stats[spell.damaged_stat] += damage
+          cast_loop = False
+          print(f'{self.heroes[target].name}\'s {spell.damaged_stat} is healed for {damage}!')
+          if spell.stun != 0:
+            self.heroes[target].stunned = spell.stun
+            print(f'{self.heroes[target].name} is stunned for {spell.stun} turns!')
+          if spell.dot != 0:
+            self.heroes[target].dots.append(spell.dot)  
+      
+      #area damage enemy spells
+      elif spell.area == 'all' and spell.target == 'enemy':
+        if spell.stat != 'attack':
+          for target in self.monsters:
+            if spell.special_effect == 'tick' and target not in self.dead_monsters:
+              self.tick(target, 'spell')
+            if target not in self.dead_monsters:
+              damage = spell.damagemod * (who.stats[spell.stat] * who.modifiers[spell.stat])
+              if r.randint(0,100) < (who.stats['critical chance'] * who.modifiers['critical chance']) + spell.critical_chance:
+                damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])
+                print('Critical hit!')
+              target.stats[spell.damaged_stat] -= damage
+              time.sleep(0.25)
+              print(f'{target.name}\'s {spell.damaged_stat} takes {damage} damage')
+              if target.stats['current health'] <= 0:
+                print(f'{target.name} has been slain!')
+                self.dead_monsters.append(target)
+              if spell.stun != 0:
+                target.stunned = spell.stun
+                print(f'{target.name} is stunned for {spell.stun} turns!')
+              if spell.dot != 0:
+                target.dots.append(spell.dot)
+        elif spell.stat == 'attack':
+          for target in self.monsters:
+            for x in range(spell.number_of_attacks):
+              damage = round(r.uniform(who.stats['attack value'][0],who.stats['attack value'][1]),2) * who.modifiers['attack']
+              if r.randint(0,100) <= (who.stats['critical chance'] * who.modifiers['critical chance']) + spell.critical_chance :
+                print('Critical hit!')
+                damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])      
+              damage *= spell.damagemod
+              target.stats[spell.damaged_stat] -= damage
+              print(f'{target.name}\'s {spell.damaged_stat} takes {damage} damage!')
+              if target.stats['current health'] <= 0:
+                self.dead_monsters.append(target)
+                print(f'{target.name} has been slain!')              
+              if spell.stun != 0:
+                target.stunned = spell.stun
+                print(f'{target.name} is stunned for {spell.stun} turns!')
+              if spell.dot != 0:
+                target.dots.append(spell.dot)  
+            time.sleep(0.5)
+          time.sleep(0.5)  
+          cast_loop = False    
+        cast_loop = False        
+      elif spell.area == 'all' and spell.target == 'ally':
+        if self.stat != 'attack':
+          for targets in self.heroes:
+            if target not in self.dead_players:
+              damage = spell.damagemod * (who.stats[spell.stat] * who.modifiers[spell.stat])
+              if r.randint(0,100) < (who.stats['critical chance'] * who.modifiers['critical chance']) + spell.critical_chance:
+                damage *= (who.stats['critical damage'] * who.modifiers['critical damage'])
+                print('Critical hit!')
+              target.stats[spell.damaged_stat] += damage
+              print(f'{target.name}\'s {spell.damaged_stat} is healed for {damage}!')
+              if spell.stun != 0:
+                target.stunned = spell.stun
+                print(f'{target.name} is stunned for {spell.stun} turns!')
+              if spell.dot != 0:
+                target.dots.append(spell.dot)                
+        cast_loop = False        
+
+
+  def player_turn(self, who):
+    self.buff_tick(who)
+    turn_loop = True
+    clear(2)
+    self.tick(who, 'turn')
+    if who.stunned >= 1:
+      who.stunned -= 1
+      print(f'{who.name} is stunned for {who.stunned} more turns!')
+      return
+    while turn_loop == True:
+      print('Choose attack or spells.')
+      print(f'{who.name}\'s turn.')
+      #This line does not check modifiers.
+      print(f'{who.name} has {who.stats["current health"]} / {who.stats["max health"]} health and {who.stats["current resource"]} / {who.stats["max resource"]} {who.stats["resource"]}')
+      print('Choose attack (A) or spells (S), or run (R)')
+      choice = input().lower()
+    #attack block
+      if choice == 'attack' or choice == 'a':
+        damage = round(r.uniform(who.stats['attack value'][0],who.stats['attack value'][1]),2) * who.modifiers['attack']      
+        print('Choose a target to attack. Your options are:')
+        options = [monster for monster in self.monsters if monster not in self.dead_monsters]
+        for x in options:
+          print(f'Location of {x.name}: {self.monsters.index(x) + 1} and {x.name} health is {round(x.stats["current health"],2)}')
+        try:  
+          choice = int(input()) - 1
+        except:
+          print('Not a valid input.')
+          player_turn(who)
+          return
+        if r.randint(0,100) <= (who.stats['critical chance'] * who.modifiers['critical chance']):
+          damage = (damage * (who.stats['critical damage'] * who.modifiers['critical damage']))
+          print('Critical hit!')
+        if choice <= (len(self.monsters)) and self.monsters[choice] not in self.dead_monsters:
+          self.monsters[choice].stats['current health'] -= damage
+          print(f'You dealt {damage} damage to {self.monsters[choice].name}!')
+          who.stats['current resource'] += who.stats['attack resource regeneration']
+          if who.stats['current resource'] > who.stats['max resource']:
+            who.stats['current resource'] = who.stats['max resource']
+          turn_loop = False
+          if self.monsters[choice].stats['current health'] <= 0:
+            print(f'{self.monsters[choice].name} has been slain!')
+            self.dead_monsters.append(self.monsters[choice])
+        elif choice > (len(self.monsters)):
+          print('There is no target there.')
+        elif self.monsters[choice] in self.dead_monsters:
+          print('That target is already dead.')
+     #spell block   
+      elif choice == 'spells' or choice == 'spell' or choice == 'cast a spell' or choice == 'cast spells' or choice == 's':
+        print('Which spell would you like to cast? Your options are:')
+        for spell in who.spells:
+          if who.spells[spell] != 0:
+            print(f'{spell}')
+        spell_choice = input().lower()
+        if spell_choice not in who.spells:
+          print('That is not a spell you can cast.')        
+        elif who.stats['current resource'] < who.spells[spell_choice].cost:
+          print(f'You do not have enough {who.stats["resource"]}') 
+        elif who.spells[spell_choice] == 0:
+          print('You have not learned that spell.')
+
+        elif who.spells[spell_choice] != 0:
+          self.cast(who, spell_choice)
+          return
+      elif choice == 'run' or choice == 'r':
+        return 'run'
+  
+  def monster_turn(self, who):
+    self.buff_tick(who)
+    time.sleep(0.70)
+    clear(2)
+    if who.stunned >= 1:
+      who.stunned -= 1
+      print(f'{who.name} is stunned for {who.stunned} more turns!')
+      self.tick(who, 'turn')
+      return
+    print(f'{who.name}\'s turn.')
+    print(f'{who.name} has {who.stats["current health"]} health')
+    damage = who.attack()
+    targt = r.choice(tuple(set(self.battle_order).difference(set(self.dead_players) | set(self.monsters) | set(self.dead_monsters))))
+    targt.stats['current health'] -= (damage * who.modifiers['attack'])
+    print(f'{who.name} deals {damage} to {targt.name}!')
+    if targt.stats['current health'] <= 0:
+      print(f'{targt.name} was slain!')
+      if targt in hero.party:
+        #this line avoids minions being added to the dead party list
+        self.dead_players.append(targt) 
+    self.tick(who, 'turn')
+
+
+  def tick(self, who, when):
+    if when == 'turn':  
+      if who.stats['health regeneration'] != 0:
+        who.stats['current health'] += (who.stats['health regeneration'] * who.modifiers['health regeneration'])
+      if who.stats['resource regeneration'] != 0:
+        who.stats['current resource'] += (who.stats['resource regeneration'] * who.modifiers['resource regeneration'])
+      if who.stats['current health'] > who.stats['max health']:
+          who.stats['current health'] = who.stats['max health']
+      if who.stats['current resource'] > who.stats['max resource']:
+          who.stats['current resource'] = who.stats['max resource']
+      if not who.dots and not who.buffs:
+        return
+      #THIS DOES NOT HAVE MODIFIERS, MEANING THE DOTS ABSOLUTELY WILL SNAPSHOT AND WILL NOT TAKE DEBUFFS INTO ACCOUNT
+      for dot in who.dots:
+        if dot.duration % dot.tick_rate == 0:
+          damage = dot.dot_damage_mod * dot.applicator.stats[(dot.stat)]
+          who.stats[(dot.damaged_stat)] -= damage
+          print(f'{who.name}\'s {dot.damaged_stat} took {damage} from {dot.name}!')
+          if who.stats['current health'] <= 0:
+            print(f'{who.name} was slain by {dot.name}!')
+            self.dead_monsters.append(who)
+    else:
+      for dot in who.dots:
+        damage = dot.dot_damage_mod * dot.applicator.stats[(dot.stat)]     
+        who.stats[(dot.damaged_stat)] -= damage  
+        print(f'{who.name}\'s {dot.damaged_stat} took {damage} from {dot.name}!')
+        if who.stats['current health'] <= 0:
+          print(f'{who.name} was slain by {dot.name}!')
+          self.dead_monsters.append(who)
+
 
   def battle(self):
-    self.herolist = self.heroes
-    self.monsterlist = self.monsters
-    self.deadMonsters = []
-    self.deadPlayers = []
-    battle_loop = 1
-    while battle_loop == 1:
-      for character in self.battleOrder:
-        if character.currenthp <= 0.00 and character.isHuman == 1 and character not in self.deadPlayers:
-          #print(f'{character.name} is slain!')
-          self.deadPlayers.append(character)
-        elif character.currenthp <= 0.00 and character.isHuman == 0 and character not in self.deadMonsters:
-          print(f'{character.name} is slain!')
-          self.deadMonsters.append(character)
-        elif character.isHuman == 1 and character.currenthp > 0:
-          player_turn(character, self.monsterlist, self.deadMonsters, self.herolist, self.deadPlayers)
-        elif character.isHuman == 0 and character.currenthp > 0:
-          print('monster turn')
-          #only attacks first player at the moment
-          damage = monster_turn(character)
-          #logic for later randomizing of party members, who to attack for monster
-          print(f'Monster deals {damage} to {self.herolist[0].name}!')
-          self.herolist[0].currenthp -= damage
-        if len(self.herolist) == len(self.deadPlayers):
+    self.dead_monsters = []
+    self.dead_players = []
+    player_win = 0
+    self.battle_order = self.roll_initiative(self.heroes, self.monsters)
+    win = 1
+    while win == 1:
+      if len(self.monsters) == len(self.dead_monsters):
+        player_win = 1
+        win = 0
+        break
+      for character in self.battle_order:
+        character.stats['current health'] = round(character.stats['current health'], 1)
+        if character.stats['current health'] <= 0.00 and character.isHuman == 1 and character not in self.dead_players:
+          pass  
+        elif character.stats['current health'] <= 0.00 and character.isHuman == 0 and character not in self.dead_monsters:
+          pass
+        elif character.isHuman == 1 and character.stats['current health'] > 0:
+          run = self.player_turn(character)
+          if run == 'run':
+            print('You ran away!')         
+            return
+        elif character.isHuman == 0 and character.stats['current health'] > 0:
+          self.monster_turn(character)
+        if len(self.heroes) == len(self.dead_players):
           print('Game over!')
-          battle_loop = 0
-        if len(self.monsterlist) == len(self.deadMonsters):
-          newdrop = Item()
-          newdrop.roll_stats()
-          newdrop.get_stats()
-          (hero.inventory).append(newdrop)
-          for heroes in self.herolist:
-            heroes.levelup()
-          battle_loop = 0
+          break
+          return
+        if len(self.monsters) == len(self.dead_monsters):
+          player_win = 1
+          win = 0
+          break
+    if player_win == 1:
+      newdrop = Item()
+      newdrop.roll_stats()
+      newdrop.get_stats()
+      (hero.inventory).append(newdrop)
+      for heroes in self.heroes:
+        heroes.end_battle()
+        heroes.levelup()
+      return  
     
 
-def player_turn(who, monsters, deadMonsters, party, deadPlayers):
-  back = 0
-  while back == 0:
-    clear(2)
-    print('Choose attack or spells.')
-    print(f'{who.name}\'s turn.')
-    print(f'{who.name} has {who.currenthp} health, and {who.currentmana} mana.')
-    print('Choose attack or spells.')
-    choice = input().lower()
-    if choice == 'attack':
-      damage_player, crit_value = who.attack.attack(who)
-      print('Choose a target to attack. Your options are:')
-      options = [monster for monster in monsters if monster not in deadMonsters]
-      for x in options:
-        print(f'Location of {x.name}: {monsters.index(x) + 1} and {x.name} health is {x.currenthp}')
-      choice = int(input()) - 1
-      if crit_value == 1:
-        print('Critical hit!')
-        damage_player *= who.cd
-      monsters[choice].currenthp -= round(damage_player, 2)
-      print(f'You deal {damage_player} damage to {monsters[choice].name}!')
+
+def intro(who):
+  while True:  
+    print('Please enter a class. Your options are Fighter, Ranger, or Mage.')
+    print('If you would like information on the classes, type info.')
+    class_selection = input().lower()
+    if class_selection == 'info':
+      print('Fighters gain +2 strength every level,use Rage, have 6 maximum rage and gain 1 per turn and 1 per attacl.')
+      time.sleep(1)
+      print('Rangers gain +1 dexterity and +1 strength every level, use Energy, have a maximum of 10 and gain 0 per turn (?) and 5 per attack;/.')
+      time.sleep(1)
+      print('Mages gain +2 intelligence every level, use Magical Power (?) , have a maximum of 25 and gain 5 per turn.')
+      print('Press enter to continue.')
+      input()
+    elif class_selection == 'fighter':
+      who.class_fighter()
       return
-    elif choice == 'spells' or choice == 'spell' or choice == 'cast a spell' or choice == 'cast spells' or choice == 'cast':
-      print(f'{who.name} has {who.currentmana} mana left.')
-      print('Which spell would you like to cast? Your options are:')
-    for spell in who.spells:
-      print(f'{spell}' if who.spells[spell] != 0 else '')
-    spell = input().lower()
-    if spell == 'back':
-      back = 1
-    elif spell != 'back' and who.spells[spell] != 0:
-      if who.spells[spell].target == 'enemy':
-        print('This spell targets enemies. Choose a target. Your options are:')
-        options = [monster for monster in monsters if monster not in deadMonsters]
-        for x in options:
-          print(f'Location of {x.name}: {monsters.index(x) + 1} and {x.name} health is {x.currenthp}')
-        choice = int(input()) - 1
-        who.spells[spell].cast(who,monsters,choice)
-      elif who.spells[spell].target == 'ally':
-        print('This spell targets allies. Choose a target. Your options are:')
-        options = [friend for friend in party if friend not in deadPlayers]
-        for x in options:
-          print(f'Location of {x.name}: {party.index(x) + 1} and {x.name} health is {x.currenthp}')
-        choice = int(input()) - 1
-
-def monster_turn(who):
-  clear(2)
-  print(f'{who.name}\'s turn.')
-  print(f'{who.name} has {who.currenthp} health')
-  return who.attack.attack(who) 
+    elif class_selection == 'ranger':
+      who.class_ranger()
+      return
+    elif class_selection == 'mage':
+      who.class_mage()
+      return
+    else:
+      print('Not an option, please try again')
+      
 
 
 
-#turn logic
-"""
-def player_turn(who):
-  
-    elif choice =='spells':
-
-   
-      spell = input().lower()
-      if spell == 'back':
-        back = 1
-      elif spell != 'back' and hero.spells[spell] != 0:
-        if who.currentmana < 0:
-          print('You do not have enough mana to cast this spell. You have {who.currentmana} mana left.')
-        else:
-          print(f'You cast {spell}!')
-          return (herospells.cast(who, spell))
-      else:
-        print('Not a valid choice, please try again, spellloop')
-        back = 1
-
-
- 
-"""
-
-
-
-
-
-#Game intro, player class selection and name. COMPLETE FOR NEXT VERSION
-def intro():
-  print('Please enter a class. Your options are Warrior, Ranger, or Mage.')
-  print('If you would like information on the classes, type info.')
-  class_selection = input().lower()
-  if class_selection == 'info':
-    print('Warriors gain +2 strength every level, and can specialize into warrior trees later.')
-    print('Rangers gain +1 dexterity and +1 strength every level, and can specialize into Ranger and Rogue trees later.')
-    print('Mages gain +2 intelligence every level, and can specialize into the magical trees later.')
-    intro()
-  elif class_selection == 'warrior':
-    hero.warrmod = 1
-  elif class_selection == 'ranger':
-    hero.rangermod = 1
-  elif class_selection == 'mage':
-    hero.magemod = 1
-  else:
-    print('Not an option, please try again')
-    intro()
-
-#main menu COMPLETE FOR NEXT VERSION
+#main menu
 def menu():
-  print('Choose where to go. Your options are Town, Battle, Inventory, Stats, or Quit.')
+  print('Choose where to go. Your options are Town(t), Battle(b), Inventory(i), Stats(s), or Quit(q).')
   location = input().lower()
-  if location == 'town':
-    town(hero)
-  elif location == 'inventory':
-    inventory(hero)
-  elif location == 'stats':
-    stats(hero)
-  elif location == 'quit':
-    print('no quit logic yet! out of luck')
-  elif location == 'battle':
-    monsterlist = []
-    monsters = r.randint(0,10)
-    if monsters >= 9:
-      print('5 monsters appear!')
-      monsterlist.extend((Monster('yikes'), Monster('jeepers'), Monster('eek'), Monster('aaah'), Monster('Oowow')))
-    elif monsters >= 6 and monsters < 9:
-      print('3 monsters appear!')
-      monsterlist.extend((Monster('yikes'), Monster('Oof'), Monster('Ooowee')))
-    elif monsters < 6:
-      print('1 monster appears!')
-      monsterlist.append(Monster('yikes'))
-    battle_forest = Battle(hero.party, monsterlist)
-    battle_forest.battle()
-
-
-
-
-#stats method COMPLETE FOR NEXT VERSION
-def stats(who):
-  print(f'{who.name} is level {who.level}')
-  if who.warrmod == 1:
-    print(f'{who.name} is a warrior.')
-  elif who.rangermod == 1:
-    print(f'{who.name} is a ranger.')
-  elif who.magemod == 1:
-    print(f'{who.name} is a mage.')
+  if len(hero.party) > 1 and location != 'b':
+    print('Who would you like to send there? Your options are:')
+    print(' '.join([x.name for x in hero.party]))
+    print('Please select using 1,2, etc.')
+    try:
+      party_member = int(input()) - 1
+    except:
+      print('That\'s not a valid input.')
+      return
+    try:
+      party_selection = hero.party[party_member]
+    except:
+      print('Out of range, there is nobody in that slot.')
   else:
-    print(f'{who.name} does not have a class.')
-  print(f'Your base attack values roll between these two numbers: {who.attack_value}')
+    party_selection = hero.party[0]
+  if location == 'town' or location == 't':
+    town(party_selection)
+  elif location == 'inventory' or location == 'i':
+    inventory(party_selection)
+  elif location == 'stats' or location == 's':
+    stats(party_selection)
+  elif location == 'quit' or location == 'q':
+    print('Thanks for playing! I think')
+    time.sleep(1)
+    exit()
+  elif location == 'battle' or location == 'b':
+    if hero.zone == 0:
+      print('You enter a forest clearing.')
+      print('You lie in wait for decent prey to approach.')
+      time.sleep(0.7)    
+      battle_forest = Battle(hero.party, [])
+      battle_forest.monster_generation()
+      battle_forest.battle()
+
+
+
+
+
+def stats(who):
+  print(f'{who.name} is level {who.base_stats["level"]}')
+  time.sleep(0.5)
+  print(f'{who.name} is a {who.class_mod}')
+  time.sleep(0.5)
+  print(f'Your base attack values roll between these two numbers: {who.base_stats["attack value"]}')
+  time.sleep(0.5)
   print(f'You have {who.skill_points} skill points.')
-  print(f'Your health is {who.currenthp} out of {who.maxhp}, and your Mana is {who.currentmana} out of {who.maxmana}')
-  print(f'You have {who.stren} strength, {who.dext} dexterity, and {who.intel} intelligence.')
+  time.sleep(0.5)
+  print(f'Your health is {who.base_stats["current health"]} out of {who.base_stats["max health"]}, and {who.base_stats["current resource"]} of {who.base_stats["max resource"]} {who.base_stats["resource"]}')
+  time.sleep(0.5)
+  print(f'You have {who.base_stats["health regeneration"]} health regeneration,  {who.base_stats["resource regeneration"]} {who.base_stats["resource"]} regeneration per turn and {who.base_stats["attack resource regeneration"]} per attack.') 
+  print(f'You have {who.base_stats["strength"]} strength, {who.base_stats["dexterity"]} dexterity, and {who.base_stats["intelligence"]} intelligence.')
+  time.sleep(0.70)
   print('The spells you have learned are:')
+  time.sleep(0.5)
   for key, value in who.spells.items():
     if value != 0:
       print(key)
-clear(2)
+  time.sleep(0.70)
+  print('The items you have equipped are:')
+  time.sleep(0.5)
+  for key, value in who.gear.items():
+    if value != 0:
+      print(f'{value.name} in slot {key}')
+  time.sleep(1.15)
+  clear(2)
+  if who.skill_points > 0:
+    who.spend_skill_points()
 
-#Inventory method. COMPLETE FOR NEXT VERSION
+        
+
+
 def inventory(who):
-  print(f'{who} INVENTORY IS BELOW ***********************')
+  print(f'{who.name} INVENTORY IS BELOW ***********************')
   for x in who.inventory:
     print(x.name)
-    clear(2)
   print('INVENTORY IS ABOVE*********************')
-  print('Enter stats to check stats on gear, equip to add a piece, remove to remove a piece, or exit to leave inventory screen.')
+  time.sleep(1.5)
+  print('Enter stats to check stats (s) on gear, equip (e) to add a piece, remove (r) to remove a piece, or back (b) to leave inventory screen.')
   choice = input().lower()
-  if choice == 'stats':
+  if choice == 'stats' or choice == 's':
     print('Enter the number of where the item is. If it\'s the first item, enter 1. Second, enter 2. Etc.')
     print('If you would like to exit, simply enter any input that isn\'t a number. Will also exit if you don\'t have gear in that slot.')
-   # try:
-    inventory_select = int(input())-1
-    print(f'{((who.inventory)[inventory_select]).name}')
-    (who.inventory[inventory_select]).get_stats()
-  elif choice == 'equip':
+    try:
+      inventory_select = int(input())-1
+      print(f'{((who.inventory)[inventory_select]).name}') 
+      (who.inventory[inventory_select]).get_stats()
+      time.sleep(0.75)
+    except:
+      print('You do not have any items there, returning to menu.')
+      time.sleep(0.6)
+  elif choice == 'equip' or choice == 'e':
     print('Alright, choose a piece to equip. Enter 1 for first piece in inventory, 2 for second, etc.')
-    inv_slot = int(input())-1
-    ((who.inventory)[inv_slot]).equip(who)
-    print(f'You have equipped {(who.inventory)[inv_slot].name}')
-  elif choice == 'remove':
+    try:
+      inv_slot = int(input())-1
+      ((who.inventory)[inv_slot]).equip(who)
+      print(f'You have equipped {(who.inventory)[inv_slot].name}')
+      time.sleep(0.7)
+    except IndexError:
+      print('You do not have any items there, returning to menu.')
+      return
+  elif choice == 'remove' or choice == 'r':
     print('Alright choose a piece to remove. Your options are:')
     for x in who.gear:
       if who.gear[x] == 0:
         print('Empty slot.')
       else:
         print(f'{(who.gear[x]).name} in slot {x}')
-    print('Enter a slot to remove... helm, chest, gloves, pants, boots')
-    removal = input()
+    print('Enter a slot to remove... helm, chest, gloves, pants, boots, etc')
+    removal = input().lower()
+    if removal not in who.gear:
+      print('Not a valid option.')
+      return
     if who.gear[removal] == 0:
       print('You aren\'t wearing anything in that slot.')
-    elif removal not in hero.gear:
+    elif removal not in who.gear:
       print('That\'s not a piece you can remove.')
     else:
       takeoff = who.gear[removal]
-      takeoff.dequip()
+      takeoff.dequip(who)
+  else:
+    return
 
 
 
-#town logic COMPLETE FOR NEXT VERSION
-def town(who):
-  print('Choose where to go. Your only option right now is Trainer.')
-  place = input().lower()
-  if place == 'trainer':
-    print(f'It requires 1 skill point to learn a skill, {who.name} has {who.skill_points}. Which skill would you like to learn? Your options are:')
-    for spell in Spells.masterlist:
-      if who.spells[spell] == 0:
-        print(spell, ' ')
-    learn = input().lower()
-    if learn not in Spells.masterlist:
-      print('That\'s not a spell you can learn, or maybe it\'s not a spell at all.')
-    elif who.skill_points < 1:
-      print('You do not have enough skill points to learn anything.')
+def trainer(who):
+  spell_choice = '0'
+  while spell_choice != 'back' or spell_choice != 'exit' or spell_choice != 'e' or spell_choice != 'b':
+    print(f'{who.name} is a {who.class_mod} with {who.skill_points} points left. These are the spells and classes they belong to:')
+    clear(2)
+    time.sleep(0.5)
+    for key, value in Spells.newmasterlist.items():
+      if key in who.class_mod or key == 'all_classes':
+        print(f'************{key} spells:************')
+        for values in value:
+          if who.spells[values] == 0:
+            blank_spell = Spells(values)
+            print(f'{blank_spell.name} : {blank_spell.desc}')
+            print('*')         
+        time.sleep(1.5)
+    print('Which spell would you like to learn? You can only learn spells belonging to your class, and all classes.')
+    print('Enter back (b) to leave')
+    spell_choice = input().lower()
+    if spell_choice == 'back' or spell_choice == 'b':
+        break
+    if spell_choice not in Spells.newmasterlist[who.class_mod] and spell_choice not in Spells.newmasterlist['all_classes']:
+      print('You can\'t learn that spell.')
+    elif  who.spells[spell_choice] != 0:
+      print('You\ve already learned that spell.')
     else:
-      who.spells[learn] = Spells(' ')
-      who.spells[learn].spellbook_add(who)
-      who.skill_points -= 1
+      if who.skill_points == 0:
+        print('You do not have enough skill points to do that.')
+        time.sleep(0.4)
+        break
+      else:     
+        newspell = Spells(spell_choice)
+        newspell.spellbook_add(who)
+        who.skill_points -= 1
+        break
+
+
+
+    
+    
+
+class Zones:
+  def __init__(self, zone_number):
+    self.debuff = 0
+    self.buff = 0
+  
+      
+
+
+
+
+def town(who):
+  print('Choose where to go. Your options are Trainer (t),')
+  place = input().lower()
+  if place == 'trainer' or place == 't':
+      trainer(who)
 
 
 
 
 #mainloop
-print('Welcome, player.')
+print('Welcome, player!')
 print('Please enter your name.')
 hero = Player(input())
-intro()
-mainLoop = True
-while mainLoop:
+if hero.name == 'mesta':
+  hero.skill_points += 5
+intro(hero)
+print('Please enter a name for your second man!')
+player2 = Player(input())
+hero.party.append(player2)
+intro(player2)
+while 1:
   clear(1)
   clear(4)
   menu()
